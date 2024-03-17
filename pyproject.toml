@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mock-rest-server"
+version = "0.0.1"
+authors = [
+  { name="David Culbreth", email="david.culbreth.256@gmail.com" },
+]
+description = "A flexible mock REST server with WYSIWYG JSON data backend. Not for production use."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.urls]
+Homepage = "https://github.com/AndroxxTraxxon/mock-rest-server"
+Issues = "https://github.com/AndroxxTraxxon/mock-rest-server/issues"

@@ -1,0 +1,13 @@
+Metadata-Version: 2.1
+Name: mock-rest-server
+Version: 0.0.1
+Summary: A flexible mock REST server with WYSIWYG JSON data backend. Not for production use.
+Author-email: David Culbreth <david.culbreth.256@gmail.com>
+Project-URL: Homepage, https://github.com/AndroxxTraxxon/mock-rest-server
+Project-URL: Issues, https://github.com/AndroxxTraxxon/mock-rest-server/issues
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+License-File: LICENSE

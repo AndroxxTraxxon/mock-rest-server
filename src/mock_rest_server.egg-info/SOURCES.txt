@@ -1,0 +1,12 @@
+LICENSE
+README.md
+pyproject.toml
+src/mock_rest_server/__init__.py
+src/mock_rest_server/__main__.py
+src/mock_rest_server/data_filters.py
+src/mock_rest_server/database.py
+src/mock_rest_server/server.py
+src/mock_rest_server.egg-info/PKG-INFO
+src/mock_rest_server.egg-info/SOURCES.txt
+src/mock_rest_server.egg-info/dependency_links.txt
+src/mock_rest_server.egg-info/top_level.txt

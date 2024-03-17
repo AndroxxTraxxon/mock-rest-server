@@ -6,8 +6,9 @@ from typing import Any, Optional, Callable, Iterable
 from warnings import warn
 from threading import Thread, Lock, Event
 from time import time
+from logging import getLogger
 import uuid
-
+LOGGER = getLogger(__name__)
 
 class JsonDatabaseError(Exception):
     """Base Error class for Json Database handling"""
@@ -49,19 +50,20 @@ class JsonDatabase(object):
         self.data_changed = Event()
         self.dirty = False
         self.last_save = -1  # this will be populated by time.time() during runtime.
+        self.logger = LOGGER.getChild(type(self).__name__)
         if not self.db_file:
-            warn("JSON DB Filepath not provided.")
+            self.logger.warning("JSON DB Filepath not provided.")
         elif not self.db_file.exists():
-            warn(f"JSON DB Filepath {db_file} does not exist.")
+            self.logger.warning(f"JSON DB Filepath {db_file} does not exist.")
         elif not self.db_file.is_file():
-            warn(f"JSON DB Filepath {db_file} is not a file.")
+            self.logger.warning(f"JSON DB Filepath {db_file} is not a file.")
         else:
             try:
-                print(f"Loading existing JSON DB from file: {db_file}")
+                self.logger.info(f"Loading existing JSON DB from file: {db_file}")
                 with self.data_lock, self.db_file.open() as db:
                     self.records.update(json.load(db))
             except Exception as ex:  # pylint: disable=broad-exception-caught
-                warn(f"Error Loading JSON DB from file {db_file}: {ex}")
+                self.logger.warning(f"Error Loading JSON DB from file {db_file}: {ex}")
         self.persist_thread.start()
 
     @classmethod
@@ -94,6 +96,16 @@ class JsonDatabase(object):
                     pass  # we didn't stop the program. this is normal.
             if self.dirty:
                 self._persist()
+
+    def _persist(self):
+        """Saves the current state of the records to disk"""
+        self.logger.info("Writing JSON DB changes to storage...")
+        with self.data_lock, self.db_file.open("w+") as db:
+            if self.data_changed.is_set():
+                self.data_changed.clear()
+            self.dirty = False
+            self.last_save = time()
+            json.dump(self.records, db, indent=2)
 
     def shutdown(self):
         """Stop the persist event loop and save current state to disk."""
@@ -212,13 +224,3 @@ class JsonDatabase(object):
             self.data_changed.set()
 
         return None
-
-    def _persist(self):
-        """Saves the current state of the records to disk"""
-        print("Writing JSON DB changes to storage...")
-        with self.data_lock, self.db_file.open("w+") as db:
-            if self.data_changed.is_set():
-                self.data_changed.clear()
-            self.dirty = False
-            self.last_save = time()
-            json.dump(self.records, db, indent=2)
