@@ -1,3 +1,4 @@
+"""Assistive dynamic filters for dealing with the resource record list queries"""
 from typing import Any
 from logging import getLogger
 
@@ -8,20 +9,22 @@ def _record_param_equals_value(param: str, search: str):
     """Generates a curried search filter for whether
     a parameter on a record contains a search string"""
     LOGGER.info("Building filter for [%s] = `%s`", param, search)
-    def _filter_func(rec: dict[str, Any]):
+
+    def _record_filter(rec: dict[str, Any]):
         return param in rec and search.casefold() == str(rec[param]).casefold()
 
-    return _filter_func
+    return _record_filter
 
 
 def _record_param_contains_value(param: str, search: str):
     """Generates a curried search filter for whether
     a parameter on a record contains a search string"""
     LOGGER.info("Building filter for [%s] contains `%s`", param, search)
-    def _filter_func(rec: dict[str, Any]):
+
+    def _record_filter(rec: dict[str, Any]):
         return param in rec and search.casefold() in str(rec[param]).casefold()
 
-    return _filter_func
+    return _record_filter
 
 
 def _record_param_startswith_value(param: str, search: str):
@@ -29,14 +32,14 @@ def _record_param_startswith_value(param: str, search: str):
     a parameter on a record starts with a search string"""
     LOGGER.info("Building filter for [%s] starts with `%s`", param, search)
 
-    def _filter_func(rec: dict[str, Any]):
+    def _record_filter(rec: dict[str, Any]):
         return (
             param in rec
             and rec[param]
             and str(rec[param]).casefold().startswith(search.casefold())
         )
 
-    return _filter_func
+    return _record_filter
 
 
 def _record_param_endswith_value(param: str, search: str):
@@ -44,14 +47,14 @@ def _record_param_endswith_value(param: str, search: str):
     a parameter on a record ends with a search string"""
     LOGGER.info("Building filter for [%s] ends with `%s`", param, search)
 
-    def _filter_func(rec: dict[str, Any]):
+    def _record_filter(rec: dict[str, Any]):
         return (
             param in rec
             and rec[param]
             and str(rec[param]).casefold().endswith(search.casefold())
         )
 
-    return _filter_func
+    return _record_filter
 
 
 def build_query_filter(param: str, value: str, wild_card: str):

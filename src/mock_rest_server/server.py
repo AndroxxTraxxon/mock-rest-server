@@ -9,7 +9,7 @@ from http.server import BaseHTTPRequestHandler
 import json
 from urllib import parse
 from typing import Any, Callable
-
+import traceback
 from .database import (
     JsonDatabase,
     JsonDatabaseError,
@@ -32,6 +32,10 @@ JSON_CONTENT_TYPE = "application/json"
 
 class RequestBodyReadError(ValueError):
     """An Exception type for when the request body cannot be read."""
+
+
+class UninitializedDatabase(ValueError):
+    """An exception type for when the JSON database has not been configured"""
 
 
 class JsonHttpResponse:
@@ -117,23 +121,32 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
     PATH_SEP = "/"
     FIELD_QUERY_PARAM = "_f"
     WILD_CARD = "*"
+    database: JsonDatabase | None = None
 
+    # internal handler variables used by BaseHTTPRequestHandler
+    raw_requestline: str
     requestline: str
     request_version: str
     command: str
     close_connection: bool
 
+    @classmethod
+    def configure(cls, **kwargs):
+        """Configure the request handler class"""
+        if database := kwargs.pop("database", None):
+            cls.database = database
+
     def handle_one_request(self):
         """Handle a single HTTP request."""
         try:
-            raw_requestline = self.rfile.readline(65537)
-            if len(raw_requestline) > 65536:
+            self.raw_requestline = self.rfile.readline(65537)
+            if len(self.raw_requestline) > 65536:
                 self.requestline = ""
                 self.request_version = ""
                 self.command = ""
                 self.send_error(HTTPStatus.REQUEST_URI_TOO_LONG)
                 return
-            if not raw_requestline:
+            if not self.raw_requestline:
                 self.close_connection = True
                 return
             if not self.parse_request():
@@ -143,14 +156,21 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
             if not hasattr(self, mname):
                 raise NotImplementedError()
             try:
-                response = getattr(self, mname)()
+                if not self.database:
+                    raise UninitializedDatabase()
+                response = getattr(self, mname)(self.database)
             except JsonDatabaseError as e:
                 response = JsonHttpResponse.from_database_error(e)
             except NotImplementedError:
                 response = JsonHttpResponse.with_error(
                     f"Unsupported method ({self.command})", HTTPStatus.NOT_IMPLEMENTED
                 )
+            except UninitializedDatabase:
+                response = JsonHttpResponse.with_error(
+                    "Database was not initialized", HTTPStatus.INTERNAL_SERVER_ERROR
+                )
             except Exception as e:  # pylint: disable=broad-exception-caught
+                print(traceback.format_exc())
                 response = JsonHttpResponse.from_exception(e)
             self.send_response(response.status)
             if response.has_body:
@@ -180,7 +200,7 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
 
         return json.loads(self.rfile.read(length))
 
-    def respond_post(self) -> JsonHttpResponse:
+    def respond_post(self, database: JsonDatabase) -> JsonHttpResponse:
         """Handler function for POST requests"""
         url_parts = parse.urlsplit(self.path)
         slices = url_parts.path.lstrip(self.PATH_SEP).split(self.PATH_SEP)
@@ -198,7 +218,7 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
         try:
             record = self.read_request_body()
 
-            created_record = JsonDatabase.instance().create(
+            created_record = database.create(
                 resource_type, record, record_id
             )
 
@@ -208,17 +228,17 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
         except ValueError as er:
             return JsonHttpResponse.from_exception(er, HTTPStatus.BAD_REQUEST)
 
-    def respond_get(self) -> JsonHttpResponse:
+    def respond_get(self, database: JsonDatabase) -> JsonHttpResponse:
         """Handler function for GET requests"""
         url_parts = parse.urlsplit(self.path)
         slices = url_parts.path.lstrip(self.PATH_SEP).split(self.PATH_SEP)
         if slices == [""]:
             return JsonHttpResponse.with_payload(
-                {"resources": list(JsonDatabase.instance().available_resources())}
+                {"resources": list(database.available_resources())}
             )
 
         resource_type, *rest = slices
-        if resource_type not in JsonDatabase.instance().available_resources():
+        if resource_type not in database.available_resources():
             return _StandardResponses.not_found
 
         if not rest or rest == [""]:
@@ -230,9 +250,9 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
                     query_fields = query_params[self.FIELD_QUERY_PARAM]
                 query_filters = self.generate_search_filters(query_params)
 
-                records = JsonDatabase.instance().list_resource(
-                    resource_type, query_fields, query_filters
-                )
+            records = database.list_resource(
+                resource_type, query_fields, query_filters
+            )
 
             return JsonHttpResponse.with_payload(records)
 
@@ -240,7 +260,7 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
             return _StandardResponses.unexpected_path(self.path)
 
         record_id = rest[0]
-        record = JsonDatabase.instance().read(resource_type, record_id)
+        record = database.read(resource_type, record_id)
         if not record:
             return _StandardResponses.not_found
 
@@ -257,7 +277,7 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
                 query_filters.append(build_query_filter(param, value, self.WILD_CARD))
         return query_filters
 
-    def respond_put(self) -> JsonHttpResponse:
+    def respond_put(self, database: JsonDatabase) -> JsonHttpResponse:
         """PUT command response handler"""
         url_parts = parse.urlsplit(self.path)
         slices = url_parts.path.lstrip(self.PATH_SEP).split(self.PATH_SEP)
@@ -279,11 +299,11 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
         except ValueError as er:
             return JsonHttpResponse.from_exception(er, HTTPStatus.BAD_REQUEST)
 
-        updated_record = JsonDatabase.instance().set(resource_type, record, record_id)
+        updated_record = database.set(resource_type, record, record_id)
 
         return JsonHttpResponse.with_payload(updated_record)
 
-    def respond_patch(self) -> JsonHttpResponse:
+    def respond_patch(self, database: JsonDatabase) -> JsonHttpResponse:
         """PATCH command response handler"""
         url_parts = parse.urlsplit(self.path)
         slices = url_parts.path.lstrip(self.PATH_SEP).split(self.PATH_SEP)
@@ -305,13 +325,13 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
         except ValueError as er:
             return JsonHttpResponse.from_exception(er, HTTPStatus.BAD_REQUEST)
 
-        updated_record = JsonDatabase.instance().update(
+        updated_record = database.update(
             resource_type, record, record_id
         )
 
         return JsonHttpResponse.with_payload(updated_record)
 
-    def respond_delete(self) -> JsonHttpResponse:
+    def respond_delete(self, database: JsonDatabase) -> JsonHttpResponse:
         """DELETE command response handler"""
         url_parts = parse.urlsplit(self.path)
         slices = url_parts.path.lstrip(self.PATH_SEP).split(self.PATH_SEP)
@@ -327,6 +347,6 @@ class JsonHttpRequestHandler(BaseHTTPRequestHandler):
         else:
             return _StandardResponses.missing_id
 
-        JsonDatabase.instance().delete(resource_type, record_id)
+        database.delete(resource_type, record_id)
 
         return JsonHttpResponse.empty()

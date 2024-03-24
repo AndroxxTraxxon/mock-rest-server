@@ -2,3 +2,6 @@
 .mypy_cache
 .venv
 *.db.json
+*.cert
+*.key
+*.conf
