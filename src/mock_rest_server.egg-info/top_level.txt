@@ -1,1 +1,0 @@
-mock_rest_server

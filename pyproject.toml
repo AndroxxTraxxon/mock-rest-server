@@ -20,3 +20,6 @@ classifiers = [
 [project.urls]
 Homepage = "https://github.com/AndroxxTraxxon/mock-rest-server"
 Issues = "https://github.com/AndroxxTraxxon/mock-rest-server/issues"
+
+[project.scripts]
+mock-rest-server = "mock_rest_server.__main__:main"

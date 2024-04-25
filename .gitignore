@@ -5,3 +5,4 @@
 *.cert
 *.key
 *.conf
+**/*.egg-info
